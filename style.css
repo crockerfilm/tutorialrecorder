@@ -29,7 +29,8 @@ button.ghost { background: transparent; color: var(--text); }
 button:disabled { opacity: .5; cursor: default; }
 .hint { color: var(--muted); font-size: 13px; margin: 0; }
 .preview #camPreview { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 10px; object-fit: cover; transform: scaleX(-1); }
-.meter { height: 6px; background: var(--line); border-radius: 3px; margin: 10px 0 6px; overflow: hidden; }
+.meterrow { display: flex; align-items: center; gap: 8px; margin: 10px 0 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.meter { flex: 1; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
 #meterFill { height: 100%; width: 0; background: #2ecc71; transition: width 60ms linear; }
 .recbar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
 .recbar #timer { font-variant-numeric: tabular-nums; font-weight: 600; flex: 1; }
@@ -43,8 +44,15 @@ input[type=range] { accent-color: var(--accent); }
 a { color: var(--accent); }
 .mock { position: relative; aspect-ratio: 16/10; border-radius: 10px; overflow: hidden; user-select: none; touch-action: none; cursor: crosshair;
   background: linear-gradient(135deg, #3a3f5c, #1c1f2e); }
-.mockwin { position: absolute; left: 10%; top: 12%; width: 62%; height: 66%; background: rgba(255,255,255,.12); border-radius: 6px; padding: 6px; display: flex; gap: 4px; }
-.mockwin i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,.35); }
+.mockbar { position: absolute; inset: 0 0 auto; height: 7%; min-height: 18px; display: flex; align-items: center; gap: 10px; padding: 0 10px;
+  background: rgba(255,255,255,.14); backdrop-filter: blur(6px); color: rgba(255,255,255,.85); font-size: 11px; pointer-events: none; }
+.mockbar b { position: absolute; left: 50%; transform: translateX(-50%); font-weight: 700; white-space: nowrap; }
+.mockclock { margin-left: auto; opacity: .7; }
+.mockwin { position: absolute; left: 8%; top: 15%; width: 60%; height: 66%; background: rgba(255,255,255,.12); border-radius: 6px; overflow: hidden;
+  display: grid; grid-template-rows: auto 1fr; pointer-events: none; }
+.mockwinbar { display: flex; gap: 4px; padding: 6px; background: rgba(255,255,255,.08); }
+.mockwinbar i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,.35); }
+.mockwin span { display: grid; place-items: center; color: rgba(255,255,255,.4); font-size: 12px; text-align: center; padding: 0 8px; }
 .bubble { position: absolute; border-radius: 50%; overflow: hidden; border: 2px solid #fff; box-shadow: 0 4px 14px rgba(0,0,0,.4); background: #000; cursor: grab; }
 .bubble video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); pointer-events: none; display: block; }
 .mock.dragging, .mock.dragging .bubble { cursor: grabbing; }

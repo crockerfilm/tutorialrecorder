@@ -66,7 +66,8 @@ async function refreshPreview() {
   const gen = previewGen, stale = st => gen !== previewGen && (stopStream(st), true);
   const mode = ui.mode.value;
   ui.mock.hidden = mode === 'cam'; ui.bubble.hidden = mode !== 'screen+cam'; ui.camPreview.hidden = mode !== 'cam';
-  ui.previewHint.textContent = mode === 'screen+cam' ? 'Drag the bubble to where you want it on screen' : mode === 'cam' ? 'Camera preview & mic level' : 'Mic level';
+  ui.previewHint.textContent = mode === 'screen+cam' ? 'Preview of your recording: your screen, with your camera in the bubble. Drag the bubble to place it.'
+    : mode === 'cam' ? 'Preview of your recording.' : 'Your screen will fill the whole video.';
   layoutBubble();
   document.querySelectorAll('.camOpt').forEach(el => el.hidden = mode === 'screen');
   document.querySelectorAll('.bubbleOpt').forEach(el => el.hidden = mode !== 'screen+cam');
