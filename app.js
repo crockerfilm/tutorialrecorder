@@ -298,7 +298,7 @@ function finish(s) {
     const a = Object.assign(document.createElement('a'), { href: url, download: `${ui.fileName.value.trim() || 'Recording'}.${ext}` });
     a.click();
   };
-  $('#testReview').hidden = !s.test; $('#saveRow').hidden = s.test;
+  $('#testReview').hidden = !s.test; $('#saveRow').hidden = $('#saveNote').hidden = s.test;
   if (s.test) ui.result.play().catch(() => {});
   showView('review');
   ui.recording.classList.remove('paused'); ui.pauseBtn.textContent = 'Pause';

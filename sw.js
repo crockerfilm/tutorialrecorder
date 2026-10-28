@@ -1,5 +1,5 @@
 // Minimal offline cache so the app is installable and opens without a network.
-const CACHE = 'recorder-v7';
+const CACHE = 'recorder-v8';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'icon.svg', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {

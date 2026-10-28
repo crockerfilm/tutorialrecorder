@@ -1,6 +1,6 @@
 # Tutorial Recorder
 
-Lightweight Loom-style recorder that runs entirely in the browser — nothing is uploaded anywhere; videos save straight to the user's computer.
+Lightweight Loom-style recorder that runs entirely in the browser. **Nothing is uploaded or stored in the cloud** — there's no server; recordings stay in the browser until the user downloads them to their own computer.
 
 - Screen / window / tab capture, mic narration, optional system audio
 - Webcam bubble you drag into place on a mock screen, or camera-only mode
