@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sync Test</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: #000; color: #ececf1; font: 15px/1.5 -apple-system, BlinkMacSystemFont, sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 40px 16px; }
+  h1 { font-size: 22px; margin: 0 0 8px; }
+  p, li { color: #9a9aa8; }
+  button { font: inherit; font-weight: 600; border-radius: 8px; padding: 10px 18px; cursor: pointer; border: 0; background: #7c5cff; color: #fff; }
+  button.ghost { background: #2c2c36; }
+  #status { color: #ececf1; font-weight: 600; min-height: 1.5em; }
+  .big { font-size: 44px; font-weight: 800; color: #fff; margin: 4px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-variant-numeric: tabular-nums; }
+  td, th { text-align: left; padding: 4px 8px; border-bottom: 1px solid #2c2c36; color: #ccc; }
+  video { width: 100%; border-radius: 10px; background: #111; margin-top: 12px; }
+  #flash { position: fixed; inset: 0; background: #fff; z-index: 10; }
+  #shade { position: fixed; inset: 0; background: #000; z-index: 9; display: grid; place-items: center; color: #555; font-size: 18px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>A/V sync test</h1>
+  <p>Measures how far your camera lags your mic so we can set the recorder's default audio delay.</p>
+  <ol>
+    <li>Sit in front of your MacBook as if you were recording. Normal room lighting is fine.</li>
+    <li>No headphones. Turn the volume to about half.</li>
+    <li>The screen goes black, then flashes white with a beep 8 times (~15 seconds). Keep still and face the screen.</li>
+  </ol>
+  <label style="display:flex;gap:8px;align-items:center;margin:0 0 16px"><input type="checkbox" id="verify">
+    Verify mode: apply the recorder's current A/V sync setting (<span id="curSync"></span>) — result should be near 0</label>
+  <button id="runBtn">Run test</button>
+  <p id="status"></p>
+  <section id="results" hidden>
+    <p>Recommended <strong>Audio sync delay</strong>:</p>
+    <div class="big" id="rec"></div>
+    <p id="spread"></p>
+    <table id="table"></table>
+    <button id="copyBtn">Copy results</button>
+    <button id="againBtn" class="ghost">Run again</button>
+    <video id="playback" controls playsinline></video>
+  </section>
+</main>
+<div id="shade" hidden>Look at the screen…</div>
+<div id="flash" hidden></div>
+
+<script>
+// Temporary calibration tool. Records camera + mic through the same pipeline as the recorder
+// (track processor → canvas → track generator → MediaRecorder, mic via Web Audio), while the
+// screen flashes and the speakers beep at the same instant. The flash shows up in the camera
+// (your face lights up), the beep in the mic; their gap in the finished file is the delay to apply.
+
+const $ = s => document.querySelector(s);
+const FPS = 30, TRIALS = 8, GAP = 1600;
+let lastReport = '';
+
+function makeTicker(fps, fn) {
+  const src = `let id;onmessage=e=>{clearInterval(id);if(e.data)id=setInterval(()=>postMessage(0),${1000 / fps})}`;
+  const w = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+  w.onmessage = fn; w.postMessage(1);
+  return () => { w.postMessage(0); w.terminate(); };
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const pickMime = () => ['video/mp4;codecs=avc1.640033,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp8,opus', 'video/webm']
+  .find(m => MediaRecorder.isTypeSupported(m));
+const appSync = () => { const v = parseInt(localStorage.getItem('avsync')); return Number.isFinite(v) ? v : -230; };
+const median = a => { const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+
+// Same recording path as the app, with no audio delay applied.
+async function record(videoTrack, audioStream, ac, during, sync = 0) {
+  const videoDelay = Math.max(0, -sync), audioDelay = Math.max(0, sync), q = [];
+  const reader = new MediaStreamTrackProcessor({ track: videoTrack }).readable.getReader();
+  let frame = null;
+  (async () => { while (true) { const { value, done } = await reader.read().catch(() => ({ done: true })); if (done) break; frame?.close(); frame = value; } })();
+  const W = 1280, H = 720, canvas = new OffscreenCanvas(W, H), ctx = canvas.getContext('2d', { alpha: false });
+  const gen = new MediaStreamTrackGenerator({ kind: 'video' }), writer = gen.writable.getWriter();
+  const stopTicker = makeTicker(FPS, () => {
+    if (frame) ctx.drawImage(frame, 0, 0, W, H);
+    const now = performance.now();
+    q.push({ t: now, f: new VideoFrame(canvas, { timestamp: now * 1000 }) });
+    while (q.length > 1 && now - q[1].t >= videoDelay) q.shift().f.close();
+    if (writer.desiredSize > 0) writer.write(new VideoFrame(q[0].f, { timestamp: now * 1000 })).catch(() => {});
+  });
+  const dest = ac.createMediaStreamDestination();
+  const delay = ac.createDelay(1); delay.delayTime.value = audioDelay / 1000; delay.connect(dest);
+  ac.createMediaStreamSource(audioStream).connect(delay);
+  const mime = pickMime(), chunks = [];
+  const rec = new MediaRecorder(new MediaStream([gen, ...dest.stream.getAudioTracks()]), { mimeType: mime, videoBitsPerSecond: 6e6 });
+  rec.ondataavailable = e => e.data.size && chunks.push(e.data);
+  rec.start(500);
+  await during();
+  rec.stop(); await new Promise(r => rec.onstop = r);
+  stopTicker(); reader.cancel(); frame?.close(); q.forEach(x => x.f.close());
+  return new Blob(chunks, { type: mime.split(';')[0] });
+}
+
+function flashBeep(ac, out = ac.destination) {
+  return new Promise(res => requestAnimationFrame(() => {
+    $('#flash').hidden = false;
+    const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime;
+    o.frequency.value = 2000;
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.8, t + 0.002); g.gain.setValueAtTime(0.8, t + 0.08); g.gain.linearRampToValueAtTime(0, t + 0.1);
+    o.connect(g).connect(out); o.start(t); o.stop(t + 0.12);
+    setTimeout(() => { $('#flash').hidden = true; res(); }, 300);
+  }));
+}
+
+// Finds beep onsets in the audio and flash onsets in the video of a recorded file.
+async function analyze(blob, onProgress = () => {}) {
+  const audio = await new AudioContext().decodeAudioData(await blob.arrayBuffer());
+  const ch = audio.getChannelData(0), sr = audio.sampleRate, step = Math.round(sr * 0.001);
+  const env = [];
+  for (let i = 0; i + step <= ch.length; i += step) { let m = 0; for (let j = i; j < i + step; j++) m = Math.max(m, Math.abs(ch[j])); env.push(m); }
+  const aPeak = Math.max(...env), aThr = aPeak * 0.3;
+  const beeps = [];
+  env.forEach((v, k) => { const t = k / 1000; if (v > aThr && (!beeps.length || t - beeps.at(-1) > 0.6)) beeps.push(t); });
+
+  const v = $('#playback'); v.muted = true; v.src = URL.createObjectURL(blob);
+  const c = new OffscreenCanvas(32, 18), cx = c.getContext('2d', { willReadFrequently: true }), samples = [];
+  await new Promise(done => {
+    const cb = (_, md) => {
+      cx.drawImage(v, 0, 0, 32, 18);
+      const d = cx.getImageData(0, 0, 32, 18).data; let l = 0;
+      for (let i = 0; i < d.length; i += 4) l += 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+      samples.push([md.mediaTime, l / (d.length / 4)]);
+      onProgress(md.mediaTime / (v.duration || 20));
+      v.requestVideoFrameCallback(cb);
+    };
+    v.requestVideoFrameCallback(cb);
+    v.onended = done; v.play();
+  });
+  const ls = samples.map(s => s[1]), base = median(ls), vPeak = Math.max(...ls), vThr = base + 0.35 * (vPeak - base);
+  const flashes = [];
+  for (let i = 1; i < samples.length; i++) {
+    const [t, l] = samples[i];
+    if (l > vThr && samples[i - 1][1] <= vThr && (!flashes.length || t - flashes.at(-1) > 0.6)) flashes.push(t);
+  }
+  const pairs = flashes.map(f => {
+    const b = beeps.reduce((best, x) => Math.abs(x - f) < Math.abs(best - f) ? x : best, Infinity);
+    return Math.abs(b - f) < 0.6 ? { flash: f, beep: b, offset: Math.round((f - b) * 1000) } : null;
+  }).filter(Boolean);
+  return { pairs, beeps, flashes, lumaRange: [Math.round(base), Math.round(vPeak)] };
+}
+
+async function run() {
+  $('#runBtn').disabled = true; $('#results').hidden = true;
+  const status = t => $('#status').textContent = t;
+  let cam, mic;
+  try {
+    cam = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } } });
+    // Echo cancellation would erase our own beep, so it's off for the test only.
+    mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+  } catch (e) { status('Camera/mic access needed: ' + e.message); $('#runBtn').disabled = false; return; }
+
+  const ac = new AudioContext(), applied = $('#verify').checked ? appSync() : 0;
+  $('#shade').hidden = false;
+  await document.documentElement.requestFullscreen?.().catch(() => {});
+  const blob = await record(cam.getVideoTracks()[0], mic, ac, async () => {
+    await sleep(1500);
+    for (let i = 0; i < TRIALS; i++) { await flashBeep(ac); await sleep(GAP - 300 + Math.random() * 200); }
+    await sleep(500);
+  }, applied);
+  $('#shade').hidden = true;
+  document.fullscreenElement && document.exitFullscreen();
+  const camLabel = cam.getVideoTracks()[0].label, micLabel = mic.getAudioTracks()[0].label;
+  cam.getTracks().forEach(t => t.stop()); mic.getTracks().forEach(t => t.stop());
+
+  $('#results').hidden = false;
+  const r = await analyze(blob, p => status(`Analyzing… ${Math.min(99, Math.round(p * 100))}%`));
+  status('');
+  showResults(r, { camLabel, micLabel, outputLatency: Math.round(((ac.outputLatency || 0) + ac.baseLatency) * 1000), applied });
+  ac.close();
+  $('#runBtn').disabled = false;
+}
+
+function showResults(r, info) {
+  const offs = r.pairs.map(p => p.offset);
+  if (offs.length < 3) {
+    $('#rec').textContent = '—';
+    $('#spread').textContent = `Only caught ${offs.length} of ${TRIALS} flashes (beeps heard: ${r.beeps.length}, flashes seen: ${r.flashes.length}). Turn the volume up, sit closer to the screen, and try again.`;
+  } else {
+    // The beep leaves the speakers ~outputLatency after the flash hits the screen (~10ms display lag),
+    // so the raw gap understates the video lag by the difference.
+    // With a setting S applied, the measured gap is the residual; the full setting is S + residual.
+    const m = median(offs), corrected = m + info.outputLatency - 10, recMs = Math.round((info.applied + corrected) / 10) * 10;
+    $('#rec').textContent = recMs + ' ms';
+    if (info.applied) $('#rec').textContent += ` (residual with ${info.applied} ms applied: ${Math.round(corrected)} ms)`;
+    $('#spread').textContent = `Raw median ${m} ms across ${offs.length} flashes (range ${Math.min(...offs)} to ${Math.max(...offs)} ms), ` +
+      `+${info.outputLatency} ms speaker latency −10 ms display. ` +
+      (recMs >= 0 ? 'Positive = delay audio.' : 'Negative = delay video.');
+  }
+  $('#table').innerHTML = '<tr><th>#</th><th>Flash seen (s)</th><th>Beep heard (s)</th><th>Video lag (ms)</th></tr>' +
+    r.pairs.map((p, i) => `<tr><td>${i + 1}</td><td>${p.flash.toFixed(3)}</td><td>${p.beep.toFixed(3)}</td><td>${p.offset}</td></tr>`).join('');
+  lastReport = [`Sync test: ${$('#rec').textContent} recommended`, $('#spread').textContent,
+    `Applied setting during test: ${info.applied} ms`, `Raw offsets: ${offs.join(', ')}`, `Camera: ${info.camLabel}`, `Mic: ${info.micLabel}`,
+    `Speaker latency: ${info.outputLatency} ms`, `Brightness: ${r.lumaRange.join('→')}`, navigator.userAgent].join('\n');
+}
+
+$('#curSync').textContent = appSync() + ' ms';
+$('#runBtn').onclick = run;
+$('#againBtn').onclick = run;
+$('#copyBtn').onclick = () => navigator.clipboard.writeText(lastReport).then(() => $('#copyBtn').textContent = 'Copied ✓');
+</script>
+</body>
+</html>

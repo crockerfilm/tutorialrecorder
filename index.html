@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tutorial Recorder</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#7c5cff">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <header>
+    <img src="icon.svg" alt="" width="28" height="28">
+    <h1>Tutorial Recorder</h1>
+    <button id="installBtn" class="ghost" hidden>Install app</button>
+  </header>
+
+  <!-- Setup checklist: live checks for browser, permissions and macOS settings -->
+  <section id="checklist" class="panel checklist">
+    <div class="cl-head">
+      <span id="clIcon" class="cl-icon"></span>
+      <div><strong id="clTitle"></strong><div id="clSub" class="hint"></div></div>
+      <button id="clToggle" class="ghost small"></button>
+    </div>
+    <ol id="clItems"></ol>
+  </section>
+
+  <!-- Setup -->
+  <section id="setup" class="panel">
+    <div class="grid">
+      <div class="controls">
+        <label>What to record
+          <select id="mode">
+            <option value="screen+cam">Screen + camera bubble</option>
+            <option value="screen">Screen only</option>
+            <option value="cam">Camera only</option>
+          </select>
+        </label>
+        <label>Microphone
+          <select id="micSelect"><option value="">No microphone</option></select>
+        </label>
+        <label class="camOpt">Camera
+          <select id="camSelect"></select>
+        </label>
+        <div class="row camOpt bubbleOpt">
+          <label>Bubble size
+            <select id="bubbleSize">
+              <option value="0.16">Small</option>
+              <option value="0.22" selected>Medium</option>
+              <option value="0.30">Large</option>
+            </select>
+          </label>
+        </div>
+        <label class="check screenOpt"><input type="checkbox" id="sysAudio"> Include computer / tab audio</label>
+        <label class="check"><input type="checkbox" id="countdown" checked> 3-second countdown</label>
+        <details class="advanced">
+          <summary>Advanced</summary>
+          <label>A/V sync: <span id="syncVal">-230 ms</span>
+            <input type="range" id="sync" min="-500" max="500" step="10" value="-230">
+            <span class="hint">Pre-set for MacBook Pro cameras. Using an external webcam or mic and the lips look off? <a href="synctest.html" target="_blank">Run the sync test</a> and set this to its result.</span>
+          </label>
+        </details>
+        <div class="row startrow">
+          <button id="testBtn" class="ghost">Try a 5-sec test</button>
+          <button id="startBtn" class="primary">● Start recording</button>
+        </div>
+        <p class="hint" id="hint"></p>
+      </div>
+      <div class="preview">
+        <div id="mock" class="mock">
+          <div class="mockwin"><i></i><i></i><i></i></div>
+          <div id="bubble" class="bubble"><video id="bubbleVideo" autoplay muted playsinline></video></div>
+        </div>
+        <video id="camPreview" autoplay muted playsinline></video>
+        <div class="meter"><div id="meterFill"></div></div>
+        <p class="hint" id="previewHint"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Recording -->
+  <section id="recording" class="panel" hidden>
+    <div class="recbar">
+      <span class="dot"></span><span id="timer">00:00</span>
+      <button id="pauseBtn" class="ghost">Pause</button>
+      <button id="stopBtn" class="primary">■ Stop</button>
+    </div>
+    <canvas id="stage"></canvas>
+    <p class="hint">This is exactly what's being recorded. Controls also float in a small always-on-top window.</p>
+  </section>
+
+  <!-- Review -->
+  <section id="review" class="panel" hidden>
+    <div id="testReview" class="testreview" hidden>
+      <div><strong>How did that look?</strong>
+        <p class="hint">Check that you can hear yourself, the bubble is where you want it, and your lips match your voice.</p></div>
+      <button id="testAdjustBtn" class="ghost">Change settings</button>
+      <button id="testGoBtn" class="primary">Looks good — start recording</button>
+    </div>
+    <video id="result" controls playsinline></video>
+    <div class="row end" id="saveRow">
+      <input id="fileName" spellcheck="false">
+      <span id="fileExt" class="hint"></span>
+      <button id="againBtn" class="ghost">Record another</button>
+      <button id="downloadBtn" class="primary">Download</button>
+    </div>
+    <p class="hint" id="fileInfo"></p>
+  </section>
+
+  <div id="countOverlay" hidden><span id="countNum">3</span></div>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
